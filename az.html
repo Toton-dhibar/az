@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure File Manager</title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        #app {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        #currentPathDisplay {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0078d4;
+        }
+
+        button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #005bb5;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Enhanced Progress Bar with Water Animation - Moved to Top */
+        #progressBarContainer {
+            width: 100%;
+            margin-bottom: 20px;
+            display: none;
+            background-color: #fff;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-wrapper {
+            position: relative;
+            width: 100%;
+            height: 60px;
+            background-color: #e8f4fd;
+            border-radius: 30px;
+            overflow: hidden;
+            border: 2px solid #0078d4;
+        }
+
+        #progressFill {
+            position: relative;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(45deg, #4fc3f7, #29b6f6, #03a9f4, #0288d1);
+            background-size: 400% 400%;
+            border-radius: 30px;
+            transition: width 0.5s ease;
+            animation: waterFlow 3s ease-in-out infinite;
+            overflow: hidden;
+        }
+
+        /* Water wave animation */
+        #progressFill::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 200%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(255, 255, 255, 0.3), 
+                transparent);
+            animation: wave 2s linear infinite;
+        }
+
+        #progressFill::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: repeating-linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.1) 0px,
+                rgba(255, 255, 255, 0.3) 10px,
+                rgba(255, 255, 255, 0.1) 20px
+            );
+            animation: ripple 1.5s ease-in-out infinite;
+        }
+
+        @keyframes waterFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        @keyframes wave {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        @keyframes ripple {
+            0%, 100% { 
+                transform: translateY(0) scaleY(1);
+                opacity: 0.3;
+            }
+            50% { 
+                transform: translateY(-5px) scaleY(1.1);
+                opacity: 0.6;
+            }
+        }
+
+        /* Progress Text Container */
+        .progress-info {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .progress-percentage {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+
+        .progress-details {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .upload-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            min-width: 120px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #0078d4;
+        }
+
+        /* File List Styles */
+        #fileList {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #fff;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+
+        .file-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .file-item strong {
+            font-weight: bold;
+        }
+
+        /* Folder items styling - to make them stand out */
+        .file-item.folder {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            border-left: 4px solid #fdcb6e;
+        }
+
+        /* Three-Dot Button */
+        .three-dot-btn {
+            background: none;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 2px;
+            color: #333;
+            transition: color 0.3s ease;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 3px;
+        }
+
+        .three-dot-btn:hover {
+            color: #0078d4;
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        /* Dropdown Menu */
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 10px;
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            z-index: 10;
+            animation: fadeIn 0.3s ease;
+            width: 80px; /* Reduced width */
+        }
+
+        .dropdown-menu.show {
+            display: block;
+        }
+
+        .dropdown-menu button {
+            width: 100%;
+            padding: 6px 10px; /* Reduced padding */
+            text-align: left;
+            background: none;
+            border: none;
+            color: #333;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-size: 12px; /* Smaller font size */
+        }
+
+        .dropdown-menu button:hover {
+            background-color: #f0f0f0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Modal Styles */
+        #createFolderModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #createFolderModal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 300px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 10px;
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .modal-content button:hover {
+            background-color: #005bb5;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            button {
+                margin: 5px 0;
+                width: 100%;
+            }
+
+            .upload-stats {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .progress-percentage {
+                font-size: 16px;
+            }
+
+            .progress-details {
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div id="currentPathDisplay">Home</div>
+            <div>
+                <button id="backButton" onclick="goBack()">🔙 Back</button>
+                <button id="createFolderButton" onclick="openCreateFolderModal()">📂 Create Folder</button>
+                <button id="uploadButton" onclick="triggerFileInput()">📤 Upload File</button>
+                <input type="file" id="fileInput" style="display:none" multiple onchange="uploadFile()">
+            </div>
+        </header>
+
+        <!-- Enhanced Progress Bar - Moved to Top -->
+        <div id="progressBarContainer">
+            <div class="progress-wrapper">
+                <div id="progressFill"></div>
+                <div class="progress-info">
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                    <div class="progress-details" id="progressDetails">Preparing upload...</div>
+                </div>
+            </div>
+            <div class="upload-stats">
+                <div class="stat-item">
+                    <div class="stat-label">Uploaded</div>
+                    <div class="stat-value" id="uploadedSize">0 MB</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Remaining</div>
+                    <div class="stat-value" id="remainingSize">0 MB</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Size</div>
+                    <div class="stat-value" id="totalSize">0 MB</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Speed</div>
+                    <div class="stat-value" id="uploadSpeed">0 MB/s</div>
+                </div>
+            </div>
+        </div>
+
+        <main>
+            <div id="fileList"></div>
+        </main>
+
+        <!-- Modal for Create Folder -->
+        <div id="createFolderModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeCreateFolderModal()">×</span>
+                <h2>Create Folder</h2>
+                <input type="text" id="newFolderName" placeholder="Folder Name" />
+                <button onclick="createFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script>const sasUrl = "https://sanu.blob.core.windows.net/test?sp=racwdli&st=2025-04-30T13:49:35Z&se=2027-04-30T21:49:35Z&spr=https&sv=2024-11-04&sr=c&sig=3orxshb95XdK%2BESKPIyw5ISSaRNzxp4OINUE934EYzk%3D";
+        const containerUrl = sasUrl.split('?')[0];
+        let currentPath = "";
+        let activeDropdown = null;
+        let uploadStartTime = 0;
+        let totalFileSize = 0;
+
+        // List files and folders - Modified to show folders first
+        async function listFiles(path = "") {
+            currentPath = path;
+            document.getElementById("currentPathDisplay").textContent = path || "Home";
+
+            const response = await fetch(`${containerUrl}?restype=container&comp=list&prefix=${path}&${sasUrl.split('?')[1]}`);
+            const text = await response.text();
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(text, "application/xml");
+            const blobs = xml.getElementsByTagName("Blob");
+            const fileList = document.getElementById("fileList");
+            fileList.innerHTML = "";
+            
+            const folders = [];
+            const files = [];
+
+            for (let blob of blobs) {
+                const name = blob.getElementsByTagName("Name")[0].textContent;
+                const shortName = name.replace(path, "").split("/")[0];
+
+                if (name.endsWith("/")) {
+                    folders.push(shortName);
+                } else if (!shortName.includes(".")) {
+                    folders.push(shortName);  // Treat as a folder if no extension
+                } else {
+                    files.push({name: name, shortName: shortName});
+                }
+            }
+
+            // Remove duplicates from folders
+            const uniqueFolders = [...new Set(folders)];
+
+            // Display folders first
+            uniqueFolders.forEach(folder => {
+                fileList.innerHTML += `
+                    <div class="file-item folder" ondblclick="navigateToFolder('${folder}')">
+                        📁 <strong>${folder}</strong>
+                        <button class="three-dot-btn" onclick="toggleDropdown(event, '${folder}')">⋮</button>
+                        <div class="dropdown-menu">
+                            <button onclick="navigateToFolder('${folder}')">📂 Open</button>
+                            <button onclick="renameFolder('${folder}')">✏️ Rename</button>
+                            <button onclick="copyLink('${folder}')">🔗 Copy Link</button>
+                            <button onclick="confirmDeleteFolder('${folder}')">🗑️ Delete</button>
+                        </div>
+                    </div>`;
+            });
+
+            // Then display files
+            files.forEach(file => {
+                fileList.innerHTML += `
+                    <div class="file-item" ondblclick="downloadFile('${file.name}')">
+                        📄 ${file.shortName}
+                        <button class="three-dot-btn" onclick="toggleDropdown(event, '${file.name}')">⋮</button>
+                        <div class="dropdown-menu">
+                            <button onclick="downloadFile('${file.name}')">📥 Download</button>
+                            <button onclick="renameFile('${file.name}')">✏️ Rename</button>
+                            <button onclick="copyLink('${file.name}')">🔗 Copy Link</button>
+                            <button onclick="confirmDelete('${file.name}')">🗑️ Delete</button>
+                        </div>
+                    </div>`;
+            });
+
+            if (fileList.innerHTML === "") {
+                fileList.innerHTML = "<p>No files or folders found.</p>";
+            }
+        }
+
+        // Toggle dropdown menu
+        function toggleDropdown(event, name) {
+            if (activeDropdown) {
+                activeDropdown.classList.remove("show");
+            }
+            const dropdown = event.target.nextElementSibling;
+            dropdown.classList.toggle("show");
+            activeDropdown = dropdown;
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest(".three-dot-btn") && !event.target.closest(".dropdown-menu")) {
+                if (activeDropdown) {
+                    activeDropdown.classList.remove("show");
+                    activeDropdown = null;
+                }
+            }
+        });
+
+        // Navigate into folders
+        function navigateToFolder(folderName) {
+            currentPath = currentPath ? `${currentPath}${folderName}/` : `${folderName}/`;
+            listFiles(currentPath);
+        }
+
+        // Go back to the previous folder
+        function goBack() {
+            if (!currentPath) return;
+            const parts = currentPath.split("/").filter(Boolean);
+            parts.pop();
+            currentPath = parts.length ? parts.join("/") + "/" : "";
+            listFiles(currentPath);
+        }
+
+        // Trigger file upload input
+        function triggerFileInput() {
+            document.getElementById("fileInput").click();
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 MB';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Calculate upload speed
+        function calculateSpeed(uploadedBytes, startTime) {
+            const elapsedTime = (Date.now() - startTime) / 1000; // in seconds
+            if (elapsedTime === 0) return 0;
+            return uploadedBytes / elapsedTime; // bytes per second
+        }
+
+        // Update progress display
+        function updateProgressDisplay(loaded, total, fileName) {
+            const percent = Math.round((loaded / total) * 100);
+            const uploadedMB = formatFileSize(loaded);
+            const remainingMB = formatFileSize(total - loaded);
+            const totalMB = formatFileSize(total);
+            const speed = calculateSpeed(loaded, uploadStartTime);
+            const speedMB = formatFileSize(speed) + '/s';
+
+            document.getElementById("progressFill").style.width = `${percent}%`;
+            document.getElementById("progressPercentage").textContent = `${percent}%`;
+            document.getElementById("progressDetails").textContent = `Uploading ${fileName}...`;
+            document.getElementById("uploadedSize").textContent = uploadedMB;
+            document.getElementById("remainingSize").textContent = remainingMB;
+            document.getElementById("totalSize").textContent = totalMB;
+            document.getElementById("uploadSpeed").textContent = speedMB;
+        }
+
+        // Upload files with enhanced progress bar
+        async function uploadFile() {
+            const files = document.getElementById("fileInput").files;
+            
+            if (files.length === 0) {
+                alert("No files selected for upload.");
+                return;
+            }
+
+            // Calculate total file size
+            totalFileSize = 0;
+            for (let file of files) {
+                totalFileSize += file.size;
+            }
+
+            document.getElementById("progressBarContainer").style.display = "block";
+            uploadStartTime = Date.now();
+
+            let totalUploaded = 0;
+
+            for (let file of files) {
+                const blobUrl = `${containerUrl}/${currentPath}${file.name}?${sasUrl.split('?')[1]}`;
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const currentFileUploaded = event.loaded;
+                        const totalUploadedSoFar = totalUploaded + currentFileUploaded;
+                        updateProgressDisplay(totalUploadedSoFar, totalFileSize, file.name);
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status === 201) {
+                        totalUploaded += file.size;
+                        console.log(`Upload complete for ${file.name}!`);
+                        
+                        // Check if all files are uploaded
+                        if (totalUploaded >= totalFileSize) {
+                            document.getElementById("progressDetails").textContent = "Upload completed!";
+                            setTimeout(() => {
+                                document.getElementById("progressBarContainer").style.display = "none";
+                                alert("All files uploaded successfully!");
+                                listFiles(currentPath);
+                            }, 2000);
+                        }
+                    } else {
+                        console.error(`Upload failed for ${file.name}! Status: ` + xhr.status);
+                        alert(`Upload failed for ${file.name}!`);
+                        document.getElementById("progressBarContainer").style.display = "none";
+                    }
+                };
+
+                xhr.onerror = () => {
+                    console.error(`An error occurred during the upload of ${file.name}.`);
+                    alert(`An error occurred during the upload of ${file.name}.`);
+                    document.getElementById("progressBarContainer").style.display = "none";
+                };
+
+                xhr.open("PUT", blobUrl, true);
+                xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
+                xhr.send(file);
+            }
+        }
+
+        // Download a file using SAS URL
+        function downloadFile(fileName) {
+            const blobUrl = `${containerUrl}/${fileName}?${sasUrl.split('?')[1]}`;
+            window.open(blobUrl, "_blank");
+        }
+
+        // Create folder
+        function openCreateFolderModal() {
+            document.getElementById("createFolderModal").classList.add("show");
+        }
+
+        // Close Create Folder Modal
+        function closeCreateFolderModal() {
+            document.getElementById("createFolderModal").classList.remove("show");
+        }
+
+        // Create a folder in the current path
+        async function createFolder() {
+            const folderName = document.getElementById("newFolderName").value.trim();
+            if (folderName) {
+                const folderPath = `${currentPath}${folderName}/`;
+                const blobUrl = `${containerUrl}/${folderPath}?${sasUrl.split('?')[1]}`;
+
+                const xhr = new XMLHttpRequest();
+                xhr.open("PUT", blobUrl, true);
+                xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
+                xhr.onload = () => {
+                    if (xhr.status === 201) {
+                        alert(`Folder "${folderName}" created!`);
+                        listFiles(currentPath);
+                        closeCreateFolderModal();
+                    } else {
+                        alert("Failed to create folder.");
+                    }
+                };
+                xhr.send();
+            }
+        }
+
+        // Confirm before deleting a file
+        function confirmDelete(fileName) {
+            const confirmation = confirm(`Are you sure you want to delete "${fileName}"?`);
+            if (confirmation) {
+                deleteFile(fileName);
+            }
+        }
+
+        // Delete file
+        async function deleteFile(fileName) {
+            const blobUrl = `${containerUrl}/${fileName}?${sasUrl.split('?')[1]}`;
+            const xhr = new XMLHttpRequest();
+            xhr.open("DELETE", blobUrl, true);
+            xhr.onload = () => {
+                if (xhr.status === 202) {
+                    alert(`File "${fileName}" deleted!`);
+                    listFiles(currentPath);
+                } else {
+                    alert("Failed to delete file.");
+                }
+            };
+            xhr.send();
+        }
+
+        // Confirm before deleting a folder
+        function confirmDeleteFolder(folderName) {
+            const confirmation = confirm(`Are you sure you want to delete the folder "${folderName}"? This will delete all files inside it.`);
+            if (confirmation) {
+                deleteFolder(folderName);
+            }
+        }
+
+        // Delete folder and its contents
+        async function deleteFolder(folderName) {
+            const folderPath = `${currentPath}${folderName}/`;
+            const response = await fetch(`${containerUrl}?restype=container&comp=list&prefix=${folderPath}&${sasUrl.split('?')[1]}`);
+            const text = await response.text();
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(text, "application/xml");
+            const blobs = xml.getElementsByTagName("Blob");
+
+            for (let blob of blobs) {
+                const fileName = blob.getElementsByTagName("Name")[0].textContent;
+                const fileUrl = `${containerUrl}/${fileName}?${sasUrl.split('?')[1]}`;
+
+                const xhr = new XMLHttpRequest();
+                xhr.open("DELETE", fileUrl, true);
+                xhr.onload = () => {
+                    if (xhr.status === 202) {
+                        console.log(`File "${fileName}" deleted successfully.`);
+                    } else {
+                        console.error(`Failed to delete file "${fileName}".`);
+                    }
+                };
+                xhr.send();
+            }
+
+            alert(`Folder "${folderName}" and all its contents deleted!`);
+            listFiles(currentPath);
+        }
+
+        // Rename file
+        function renameFile(fileName) {
+            const newName = prompt("Enter the new name for the file:", fileName);
+            if (newName && newName !== fileName) {
+                const oldUrl = `${containerUrl}/${fileName}?${sasUrl.split('?')[1]}`;
+                const newUrl = `${containerUrl}/${currentPath}${newName}?${sasUrl.split('?')[1]}`;
+
+                const xhr = new XMLHttpRequest();
+                xhr.open("PUT", newUrl, true);
+                xhr.setRequestHeader("x-ms-copy-source", oldUrl);
+                xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
+                xhr.onload = () => {
+                    if (xhr.status === 202) {
+                        deleteFile(fileName);
+                        alert(`File renamed to "${newName}"!`);
+                        listFiles(currentPath);
+                    } else {
+                        alert("Failed to rename file.");
+                    }
+                };
+                xhr.send();
+            }
+        }
+
+        // Rename folder
+        function renameFolder(folderName) {
+            const newName = prompt("Enter the new name for the folder:", folderName);
+            if (newName && newName !== folderName) {
+                const oldPath = `${currentPath}${folderName}/`;
+                const newPath = `${currentPath}${newName}/`;
+
+                   // Rename all files inside the folder
+                listFiles(oldPath).then(() => {
+                    const fileList = document.getElementById("fileList").children;
+                    for (let file of fileList) {
+                        const fileName = file.querySelector("strong").textContent;
+                        const oldUrl = `${containerUrl}/${oldPath}${fileName}?${sasUrl.split('?')[1]}`;
+                        const newUrl = `${containerUrl}/${newPath}${fileName}?${sasUrl.split('?')[1]}`;
+
+                        const xhr = new XMLHttpRequest();
+                        xhr.open("PUT", newUrl, true);
+                        xhr.setRequestHeader("x-ms-copy-source", oldUrl);
+                        xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
+                        xhr.send();
+                    }
+                    alert(`Folder renamed to "${newName}"!`);
+                    listFiles(currentPath);
+                });
+            }
+        }
+
+        // Copy link to clipboard
+        function copyLink(fileName) {
+            const link = `${containerUrl}/${fileName}?${sasUrl.split('?')[1]}`;
+            navigator.clipboard.writeText(link).then(() => {
+                alert("Link copied to clipboard!");
+            });
+        }
+
+        // Initialize the file manager
+        window.onload = function() {
+            listFiles();
+        };
+    </script>
+</body>
+</html>
+
